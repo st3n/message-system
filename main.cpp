@@ -4,7 +4,8 @@
 
 #include <iostream>
 
-int main() {
+int main()
+{
     MessageContainer container;
 
     UdpProcessor receiver1(UDP_PORT_1, container);
@@ -13,7 +14,8 @@ int main() {
     receiver1.start();
     receiver2.start();
 
-    while (true) {
+    while (true)
+    {
         sleep(1);
     }
 
