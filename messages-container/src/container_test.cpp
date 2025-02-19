@@ -10,9 +10,10 @@ struct Message {
     uint64_t MessageData;
 };
 */
+
 int main()
 {
-    LockFreeMessageMap messageMap;
+    LockFreeMessageMap messageMap(8191);
 
     Message msg1{10, 1, 1001, 12345};
     Message msg2{12, 2, 1002, 67890};
@@ -26,10 +27,11 @@ int main()
     std::cout << "Message 2 inserted: " << (inserted2 ? "Yes" : "No") << std::endl;
     std::cout << "Message 3 inserted: " << (inserted3 ? "Yes" : "No") << std::endl;
 
-    Message* foundMsg = messageMap.find(1001);
-    if (foundMsg)
+    Message foundMsg;
+    bool found = messageMap.find(1001, foundMsg);
+    if (found)
     {
-        std::cout << "Found Message: " << foundMsg->MessageData << std::endl;
+        std::cout << "Found Message: " << foundMsg.MessageData << std::endl;
     }
     else
     {
@@ -38,8 +40,8 @@ int main()
 
     messageMap.remove(1001);
 
-    foundMsg = messageMap.find(1001);
-    if (!foundMsg)
+    found = messageMap.find(1001, foundMsg);
+    if (!found)
     {
         std::cout << "Message 1001 removed successfully!" << std::endl;
     }
