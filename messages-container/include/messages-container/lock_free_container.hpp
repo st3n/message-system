@@ -58,13 +58,12 @@ class LockFreeMessageMap
 
     void debug() const {
         for (size_t i = 0; i < _capacity; ++i) {
-            printf("Bucket %zu: ", i);
             Node* node = _table[i].head.load();
             while (node) {
-                printf("%lu -> ", node->message.MessageId);
+                printf("Bucket %zu: ", i);
+                printf("%lu \n", node->message.MessageId);
                 node = node->next.load();
             }
-            printf("nullptr\n");
         }
     }
 
