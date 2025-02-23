@@ -35,7 +35,7 @@ Message generate_random_message(uint64_t id)
     };
 }
 
-int stress_test(HashMap<Message, 8191>& map, std::atomic<bool>& running)
+int stress_test(HashMap<Message, INITIAL_CAPACITY>& map, std::atomic<bool>& running)
 {
     std::vector<Message> local_messages;
     local_messages.reserve(NUM_KEYS);
@@ -79,7 +79,6 @@ int stress_test(HashMap<Message, 8191>& map, std::atomic<bool>& running)
     }
 
     // Cleanup phase
-    /*
     for (auto message : local_messages)
     {
         auto key = message.MessageId;
@@ -88,12 +87,11 @@ int stress_test(HashMap<Message, 8191>& map, std::atomic<bool>& running)
         bool found = map.find(key, found_msg);
         assert(!found);  // Should be removed
     }
-        */
 
     return 0;
 }
 
-void concurrent_operations_test(HashMap<Message, 8191>& map, size_t num_threads)
+void concurrent_operations_test(HashMap<Message, INITIAL_CAPACITY>& map, size_t num_threads)
 {
     std::atomic<bool> running(true);
     std::vector<std::thread> threads;
@@ -113,10 +111,10 @@ void concurrent_operations_test(HashMap<Message, 8191>& map, size_t num_threads)
     }
 
     // Verify final state
-    assert(!map.size() == 0);  // All keys should be removed
+    assert(map.size() == 0);  // All keys should be removed
 }
 
-void basic_concurrent_test(HashMap<Message, 8191>& map, size_t num_threads)
+void basic_concurrent_test(HashMap<Message, INITIAL_CAPACITY>& map, size_t num_threads)
 {
     std::vector<std::thread> threads;
     std::vector<uint64_t> keys;
@@ -198,7 +196,7 @@ int main()
     }
     std::cout << "Running tests with " << num_threads << " threads\n";
 
-    HashMap<Message, 8191> map;
+    HashMap<Message, INITIAL_CAPACITY> map;
 
     std::cout << "Running basic concurrency test...\n";
     basic_concurrent_test(map, num_threads);

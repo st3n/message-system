@@ -15,6 +15,8 @@
 /// The map is lock-free, but not wait-free, because resizing is done with CAS
 /// Could be done as template class -> template <size_t BUCKET_COUNT = 8191>
 
+constexpr uintptr_t DELETED_MARK = 0b01;
+
 template <typename Value, size_t Size = 8191> class HashMap
 {
     struct Node
@@ -22,9 +24,9 @@ template <typename Value, size_t Size = 8191> class HashMap
         Value message;
         std::atomic<Node*> next;
 
-        Node(const Value& msg)
+        Node(const Value& msg, Node* next_ = nullptr)
             : message(msg)
-            , next(nullptr)
+            , next(next_)
         {
         }
     };
@@ -69,7 +71,7 @@ template <typename Value, size_t Size = 8191> class HashMap
     }
 
     void resize();
-    void clear();
+    void clearInternal();
 
   public:
     void debug() const
@@ -108,6 +110,7 @@ template <typename Value, size_t Size = 8191> class HashMap
     {
         return _size.load(std::memory_order_acquire);
     }
+
 };
 
 template <typename Value, size_t Size>
@@ -120,10 +123,10 @@ HashMap<Value, Size>::HashMap()
 
 template <typename Value, size_t Size> HashMap<Value, Size>::~HashMap()
 {
-    clear();
+    clearInternal();
 }
 
-template <typename Value, size_t Size> void HashMap<Value, Size>::clear()
+template <typename Value, size_t Size> void HashMap<Value, Size>::clearInternal()
 {
     auto table_p = _table.load();
 
@@ -172,6 +175,7 @@ template <typename Value, size_t Size> bool HashMap<Value, Size>::insert(const V
         {
             delete newNode;
             std::cout << "message with ID: " << msg.MessageId << " already exist " << "\n";
+            _epochManager->exitEpoch();
             return false;
         }
 
@@ -182,7 +186,7 @@ template <typename Value, size_t Size> bool HashMap<Value, Size>::insert(const V
     do
     {
         newNode->next.store(head, std::memory_order_relaxed);
-    } while (!_table[index].head.compare_exchange_weak(head, newNode, std::memory_order_release));
+    } while (!_table[index].head.compare_exchange_weak(head, newNode, std::memory_order_release, std::memory_order_relaxed));
 
     _size.fetch_add(1, std::memory_order_relaxed);
     _epochManager->exitEpoch();
@@ -219,7 +223,7 @@ template <typename Value, size_t Size> void HashMap<Value, Size>::resize()
             do
             {
                 curr->next.store(expected, std::memory_order_relaxed);
-            } while (!newTable[newIndex].head.compare_exchange_weak(expected, curr, std::memory_order_release));
+            } while (!newTable[newIndex].head.compare_exchange_weak(expected, curr, std::memory_order_release, std::memory_order_relaxed));
 
             curr = next;
         }
@@ -243,6 +247,7 @@ template <typename Value, size_t Size> void HashMap<Value, Size>::resize()
 
 template <typename Value, size_t Size> bool HashMap<Value, Size>::find(uint64_t messageId, Value& result)
 {
+    _epochManager->enterEpoch();
     size_t index = hash(messageId, _capacity.load());
     Node* curr = _table.load()[index].head.load(std::memory_order_acquire);
     while (curr)
@@ -250,12 +255,14 @@ template <typename Value, size_t Size> bool HashMap<Value, Size>::find(uint64_t 
         if (curr->message.MessageId == messageId)
         {
             result = curr->message;
+            _epochManager->exitEpoch();
             return true;
         }
 
         curr = curr->next.load(std::memory_order_acquire);
     }
 
+    _epochManager->exitEpoch();
     return false;
 }
 

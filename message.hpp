@@ -8,6 +8,11 @@ struct Message
     uint8_t MessageType;
     uint64_t MessageId;
     uint64_t MessageData;
+
+    bool operator<(const Message& other) const
+    {
+        return MessageType < other.MessageType;
+    }
 };
 
 constexpr uint16_t MESSAGE_SIZE = sizeof(Message);

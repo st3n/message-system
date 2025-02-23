@@ -33,9 +33,10 @@ template <typename Node> class EpochManager
 
     std::atomic<bool> _reclaiming{false};  // Ensures only one thread executes reclaim()
     std::atomic<int> _activeReclaimingThread{-1};
+    std::thread::id _reclaimingThread{};
     const size_t _threadCnt;
     std::atomic<size_t> _nextThreadIdx{0};
-    static thread_local size_t _threadIdx;
+    static thread_local int _threadIdx;
 
   public:
     EpochManager()
@@ -50,13 +51,7 @@ template <typename Node> class EpochManager
 
     ~EpochManager()
     {
-        for (auto& retired : _retiredNodes)
-        {
-            for (auto node : retired)
-            {
-                node.deleter(node.ptr);
-            }
-        }
+        reclaim();
     }
 
     EpochManager(const EpochManager&) = delete;
@@ -87,20 +82,19 @@ template <typename Node> class EpochManager
         auto reclaimingThread = _activeReclaimingThread.load(std::memory_order_acquire);
         if (reclaimingThread != -1)
         {
-            assert((size_t)reclaimingThread != calcIdx() && "Reclaiming thread is the same as the current thread");
+            assert((size_t)reclaimingThread != calcIdx() && " Reclaiming thread is the same as the current thread\n");
         }
 
          // Check if the pointer is already retired
         for (auto& entry : _retiredNodes[calcIdx()]) {
             if (entry.ptr == ptr) {
-                std::cerr << "Error: Pointer " << ptr << " already retired" << std::endl;
                 return;
             }
         }
 
         _retiredNodes[calcIdx()].push_back({_localEpoch, ptr, deleter});
 
-        std::cout << "Retired ptr=" << ptr << " in epoch=" << _globalEpoch.load() << std::endl;
+        // std::cout << "Thread " << calcIdx() << " retiring node at " << ptr << std::endl;
 
         if (_retiredNodes[calcIdx()].size() >= CLEANUP_THRESHOLD)
         {
@@ -111,17 +105,12 @@ template <typename Node> class EpochManager
   private:
     /// @brief Try to reclaim memory from older epochs
     size_t calcIdx() {
-        if (_threadIdx == std::numeric_limits<size_t>::max()) {
-            _threadIdx = _nextThreadIdx.fetch_add(1, std::memory_order_relaxed) % _threadCnt;
+        if (_threadIdx < 0) {
+            _threadIdx = static_cast<int>(_nextThreadIdx.fetch_add(1, std::memory_order_relaxed) % _threadCnt);
         }
+
         return _threadIdx;
     }
-    /*
-    size_t calcIdx() const
-    {
-        return std::hash<std::thread::id>{}(std::this_thread::get_id()) % _threadCnt;
-    }
-        */
 
     void reclaim()
     {
@@ -131,12 +120,18 @@ template <typename Node> class EpochManager
         }
 
         _activeReclaimingThread = calcIdx();
+        _reclaimingThread = std::this_thread::get_id();
 
         size_t newEpoch = _globalEpoch.fetch_add(1, std::memory_order_acq_rel);
 
           // Wait for all threads to advance to the new epoch
         for (size_t i = 0; i < _threadCnt; ++i) {
+            size_t retries = 1000;
             while (_activeEpochs[i].load(std::memory_order_acquire) < newEpoch) {
+                if (--retries == 0) {
+                    std::cerr << "Warning: Thread " << i << " stuck in old epoch\n";
+                    goto EXIT;
+                }
                 std::this_thread::yield();
             }
         }
@@ -148,9 +143,9 @@ template <typename Node> class EpochManager
             auto it = list.begin();
             while (it != list.end())
             {
-                if (it->epoch < newEpoch)
+                if (it->epoch < newEpoch && _activeEpochs[i].load(std::memory_order_acquire) == 0)
                 {
-                    std::cout << "Reclaiming ptr=" << it->ptr << std::endl;
+                    // std::cout << "Thread " << _activeReclaimingThread << " reclaiming node at " << it->ptr << std::endl;
 
                     assert(it->deleter && "Node deleter is not valid");
                     assert(it->ptr && "Node ptr is not valid");
@@ -164,11 +159,12 @@ template <typename Node> class EpochManager
                 }
             }
         }
-
+EXIT:
         _reclaiming.store(false, std::memory_order_release);
         _activeReclaimingThread.store(-1, std::memory_order_release);
+        _reclaimingThread = std::thread::id{};
     }
 };
 
 template <typename Node> thread_local size_t EpochManager<Node>::_localEpoch = 0;
-template <typename Node> thread_local size_t EpochManager<Node>::_threadIdx = std::numeric_limits<size_t>::max();
+template <typename Node> thread_local int EpochManager<Node>::_threadIdx = -1;
