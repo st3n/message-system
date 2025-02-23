@@ -2,14 +2,14 @@ cmake_minimum_required(VERSION 3.10)
 project(NetworkSystem)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "-Wall -Wextra -pthread")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -pthread -fsanitize=address")
 
 # Set build types
 set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release")
 
 # Set flags for Debug and Release builds
-set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -fsanitize=address")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
 # Library for message container
