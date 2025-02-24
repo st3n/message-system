@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 
 struct Message
 {
@@ -20,7 +21,9 @@ struct Message
     }
 };
 
+constexpr size_t INITIAL_CAPACITY = 1024;
 constexpr uint16_t MESSAGE_SIZE = sizeof(Message);
+
 constexpr uint16_t UDP_PORT_1   = 50001;
 constexpr uint16_t UDP_PORT_2   = 50002;
 constexpr uint16_t TCP_PORT     = 50003;

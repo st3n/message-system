@@ -10,25 +10,27 @@
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
+#include <csignal>
 
 namespace
 {
 
 int selfSockfd{};
 int tcpSockfd{};
-struct sockaddr_in servaddr{}, cliaddr{};
-socklen_t len{sizeof(cliaddr)};
+struct sockaddr_in servaddr{};
+std::atomic<bool> _running;
 
 }  // namespace
 
-UdpProcessor::UdpProcessor(int tcpPort, int udpPort, int selfPort, HashMap<INITIAL_CAPACITY>& map)
+UdpProcessor::UdpProcessor(int tcpPort, int selfPort, HashMap<INITIAL_CAPACITY>& map)
     : _tcpServerPort(tcpPort)
-    , _udpServerPort(udpPort)
     , _selfPort(selfPort)
     , _map(map)
-    , _running(true)
 {
-    const std::array<int, 3> temp = {_tcpServerPort, _udpServerPort, _selfPort};
+    _running.store(true, std::memory_order_release);
+    std::signal(SIGINT, signalHandler);
+
+    const std::array<int, 3> temp = {_tcpServerPort, _selfPort};
 
     for (const auto port : temp)
     {
@@ -41,7 +43,7 @@ UdpProcessor::UdpProcessor(int tcpPort, int udpPort, int selfPort, HashMap<INITI
 
 UdpProcessor::~UdpProcessor()
 {
-    _running = false;
+    _running.store(false, std::memory_order_release);
 
     if (selfSockfd > 0)
     {
@@ -77,7 +79,6 @@ std::optional<int> UdpProcessor::init()
     }
 
     memset(&servaddr, 0, sizeof(servaddr));
-    memset(&cliaddr, 0, sizeof(cliaddr));
 
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = INADDR_ANY;
@@ -119,20 +120,19 @@ std::optional<int> UdpProcessor::init()
 
 void UdpProcessor::run()
 {
-    auto sock = init();
-    if (!sock)
+    if (!init())
     {
-        throw std::runtime_error("Failed to create socket");
+        throw std::runtime_error("Failed to create UDP socket");
     }
 
     std::cout << "UDP server started on port " << _selfPort << std::endl;
 
-    int sockfd = sock.value();
+    int sockfd = selfSockfd;
 
     fd_set read_fds{};
     struct timeval timeout{};
 
-    while (_running)
+    while (_running.load(std::memory_order_acquire))
     {
         FD_ZERO(&read_fds);
         FD_SET(sockfd, &read_fds);
@@ -154,6 +154,10 @@ void UdpProcessor::run()
 
         if (FD_ISSET(sockfd, &read_fds))
         {
+            struct sockaddr_in cliaddr{};
+            socklen_t len{sizeof(cliaddr)};
+            memset(&cliaddr, 0, sizeof(cliaddr));
+
             Message receivedMessage{};
 
             // Receive a message
@@ -170,12 +174,12 @@ void UdpProcessor::run()
                           << ", Id=" << receivedMessage.MessageId << ", Data=" << receivedMessage.MessageData
                           << std::endl;
 
-                _map.insert(receivedMessage); // duplicates are managed inside container
+                _map.insert(receivedMessage);  // duplicates are managed inside container
 
                 // If MessageData equals 10, send it via TCP asynchronously
                 if (receivedMessage.MessageData == 10)
                 {
-                    std::async(std::launch::async, &UdpProcessor::sendViaTcp, this, receivedMessage);
+                    std::jthread(&UdpProcessor::sendViaTcp, this, receivedMessage).detach();
                 }
             }
             else if (n < 0)
@@ -196,13 +200,31 @@ void UdpProcessor::sendViaTcp(Message message)
     }
 }
 
-int main()
+void UdpProcessor::signalHandler(int)
 {
-    HashMap<INITIAL_CAPACITY> messageMap;
-    const int ports[3] = {12345, 54321, 54312};
+    _running.store(false, std::memory_order_release);
+    std::cout << "SIGINT received, stopping UdpProcessor..." << std::endl;
+}
 
-    UdpProcessor udpProcessor(ports[0], ports[1], ports[2], messageMap);
-    udpProcessor.run();
+int main(int argc, char* argv[])
+{
+    if (argc != 4)
+    {
+        std::cerr << "Usage: " << argv[0] << " <TCP_PORT> <UDP_PORT_1> <UDP_PORT_2>" << std::endl;
+        return 1;
+    }
+
+    int tcpPort = std::stoi(argv[1]);
+    int udpPort1 = std::stoi(argv[2]);
+    int udpPort2 = std::stoi(argv[3]);
+
+    HashMap<INITIAL_CAPACITY> messageMap;
+
+    UdpProcessor udpProcessor1(tcpPort, udpPort1, messageMap);
+    UdpProcessor udpProcessor2(tcpPort, udpPort2, messageMap);
+
+    std::jthread udpThread2(&UdpProcessor::run, &udpProcessor2);
+    udpProcessor1.run();
 
     return 0;
 }
