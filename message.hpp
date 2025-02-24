@@ -13,6 +13,11 @@ struct Message
     {
         return MessageType < other.MessageType;
     }
+
+    bool operator==(const Message& other) const
+    {
+        return MessageId == other.MessageId;
+    }
 };
 
 constexpr uint16_t MESSAGE_SIZE = sizeof(Message);

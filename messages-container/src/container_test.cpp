@@ -1,22 +1,24 @@
-#include <messages-container/lock_free_container.hpp>
+// #include "messages-container/lock-free/lock_free_container.hpp"
+#include "messages-container/blocking/hash_map.hpp"
 #include <message.hpp>
 
-
 #include <atomic>
+#include <cassert>
 #include <chrono>
+#include <iostream>
 #include <random>
+#include <shared_mutex>
 #include <thread>
 #include <vector>
-#include <iostream>
-#include <cassert>
 
 namespace
 {
 
+std::shared_mutex g_mutex;
+
 constexpr size_t INITIAL_CAPACITY = 8191;
-constexpr size_t NUM_OPERATIONS   = 100000;
-constexpr size_t NUM_KEYS         = 1000;
-constexpr auto TIMEOUT_MS         = 1000;
+constexpr size_t NUM_KEYS = 1000;
+constexpr auto TIMEOUT_MS = 1000;
 
 thread_local std::mt19937_64 rng(std::random_device{}());
 
@@ -30,12 +32,12 @@ Message generate_random_message(uint64_t id)
     return Message{
         dist_size(rng),  // MessageSize
         dist_type(rng),  // MessageType
-        id,              // MessageId
-        dist_data(rng)   // MessageData
+        id,  // MessageId
+        dist_data(rng)  // MessageData
     };
 }
 
-int stress_test(HashMap<Message, INITIAL_CAPACITY>& map, std::atomic<bool>& running)
+int stress_test(HashMap<INITIAL_CAPACITY>& map, std::atomic<bool>& running)
 {
     std::vector<Message> local_messages;
     local_messages.reserve(NUM_KEYS);
@@ -43,38 +45,52 @@ int stress_test(HashMap<Message, INITIAL_CAPACITY>& map, std::atomic<bool>& runn
     for (uint64_t i = 0; i < NUM_KEYS; i++)
     {
         auto key = key_dist(rng);
-        local_messages.push_back(generate_random_message(key));
+        {
+            std::unique_lock<std::shared_mutex> lk(g_mutex);
+            local_messages.push_back(generate_random_message(key));
+        }
         map.insert(local_messages.back());
     }
 
     while (running.load())
     {
-        for (auto message : local_messages)
-        {
-            auto key = message.MessageId;
-            int op = key % 3;
+        auto message  = local_messages[dist_size(rng) % NUM_KEYS];
+        auto key = message.MessageId;
+        int op = key % 3;
 
-            switch (op)
+        switch (op)
+        {
+        case 0:
+        {  // Insert
+            auto local_key = key_dist(rng);
+            Message msg = generate_random_message(local_key);
+            map.insert(msg);
             {
-            case 0:
-            {  // Insert
-                auto local_key = key_dist(rng);
-                Message msg = generate_random_message(local_key);
-                map.insert(msg);
-                break;
+                std::unique_lock<std::shared_mutex> lk(g_mutex);
+                local_messages.push_back(msg);
             }
-            case 1:
-            {  // Find
-                Message found_msg;
-                map.find(key, found_msg);
-                break;
+
+            break;
+        }
+        case 1:
+        {  // Find
+            Message found_msg;
+            map.find(key, found_msg);
+            break;
+        }
+        case 2:
+        {  // Remove
+            map.remove(key);
+            {
+                std::unique_lock<std::shared_mutex> lk(g_mutex);
+                auto it = std::find(local_messages.begin(), local_messages.end(), message);
+                if (it != local_messages.end())
+                {
+                    local_messages.erase(it);
+                }
             }
-            case 2:
-            {  // Remove
-                map.remove(key);
-                break;
-            }
-            }
+            break;
+        }
         }
     }
 
@@ -91,7 +107,7 @@ int stress_test(HashMap<Message, INITIAL_CAPACITY>& map, std::atomic<bool>& runn
     return 0;
 }
 
-void concurrent_operations_test(HashMap<Message, INITIAL_CAPACITY>& map, size_t num_threads)
+void concurrent_operations_test(HashMap<INITIAL_CAPACITY>& map, size_t num_threads)
 {
     std::atomic<bool> running(true);
     std::vector<std::thread> threads;
@@ -111,21 +127,23 @@ void concurrent_operations_test(HashMap<Message, INITIAL_CAPACITY>& map, size_t 
     }
 
     // Verify final state
+    // map.debug();
+    std::cout << "Current Map Size: " << map.size() << "\n";
     assert(map.size() == 0);  // All keys should be removed
 }
 
-void basic_concurrent_test(HashMap<Message, INITIAL_CAPACITY>& map, size_t num_threads)
+void basic_concurrent_test(HashMap<INITIAL_CAPACITY>& map, size_t num_threads)
 {
     std::vector<std::thread> threads;
     std::vector<uint64_t> keys;
     threads.reserve(num_threads);
-    keys.reserve(num_threads); // dangerous, but we know the exact number of inserts and prevent reallocation
+    keys.reserve(num_threads);  // dangerous, but we know the exact number of inserts and prevent reallocation
 
     // Concurrent inserts
     for (size_t i = 0; i < num_threads; ++i)
     {
-        auto test_key          = key_dist(rng);
-        Message test_msg       = generate_random_message(test_key);
+        auto test_key = key_dist(rng);
+        Message test_msg = generate_random_message(test_key);
         keys.push_back(test_msg.MessageId);
 
         threads.emplace_back(
@@ -138,7 +156,8 @@ void basic_concurrent_test(HashMap<Message, INITIAL_CAPACITY>& map, size_t num_t
                     bool found = map.find(test_msg.MessageId, found_msg);
                     assert(found);
                 }
-                else {
+                else
+                {
                     std::cerr << "Failed to insert message with ID: " << test_msg.MessageId << "\n";
                 }
             });
@@ -149,14 +168,14 @@ void basic_concurrent_test(HashMap<Message, INITIAL_CAPACITY>& map, size_t num_t
         t.join();
     }
 
-    map.debug();
+    //  map.debug();
 
     std::cout << "Messages inserted, map size: " << map.size() << "\n";
 
-     // Should have exactly one successful insert
-     Message found_msg;
-     bool found = map.find(keys[3], found_msg);
-     assert(found);
+    // Should have exactly one successful insert
+    Message found_msg;
+    bool found = map.find(keys[3], found_msg);
+    assert(found);
 
     threads.clear();
 
@@ -174,7 +193,6 @@ void basic_concurrent_test(HashMap<Message, INITIAL_CAPACITY>& map, size_t num_t
     {
         t.join();
     }
-
 
     std::cout << "Verifying removal key: " << keys[1] << "\n";
     map.debug();
@@ -196,7 +214,7 @@ int main()
     }
     std::cout << "Running tests with " << num_threads << " threads\n";
 
-    HashMap<Message, INITIAL_CAPACITY> map;
+    HashMap<INITIAL_CAPACITY> map;
 
     std::cout << "Running basic concurrency test...\n";
     basic_concurrent_test(map, num_threads);
@@ -205,7 +223,6 @@ int main()
     concurrent_operations_test(map, num_threads);
 
     std::cout << "All tests passed!\n";
-
 
     return 0;
 }

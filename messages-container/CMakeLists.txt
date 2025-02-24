@@ -1,7 +1,7 @@
 # header only library
-add_library(MessagesContainerLockFree INTERFACE)
+add_library(MessagesContainer INTERFACE)
 
-target_include_directories(MessagesContainerLockFree INTERFACE
+target_include_directories(MessagesContainer INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )

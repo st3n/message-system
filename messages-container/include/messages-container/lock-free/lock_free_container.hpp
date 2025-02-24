@@ -17,7 +17,7 @@
 
 constexpr uintptr_t DELETED_MARK = 0b01;
 
-template <typename Value, size_t Size = 8191> class HashMap
+template <typename Value, size_t Size = 8191> class LF_HashMap
 {
     struct Node
     {
@@ -88,13 +88,13 @@ template <typename Value, size_t Size = 8191> class HashMap
         }
     }
 
-    HashMap();
-    ~HashMap();
+    LF_HashMap();
+    ~LF_HashMap();
 
-    HashMap(const HashMap&) = delete;
-    HashMap(HashMap&&) = delete;
-    HashMap& operator=(const HashMap&) = delete;
-    HashMap&& operator=(HashMap&&) = delete;
+    LF_HashMap(const HashMap&) = delete;
+    LF_HashMap(HashMap&&) = delete;
+    LF_HashMap& operator=(const HashMap&) = delete;
+    LF_HashMap&& operator=(HashMap&&) = delete;
 
     // Insert a message (drop duplicates)
     bool insert(const Value& msg);
@@ -114,19 +114,19 @@ template <typename Value, size_t Size = 8191> class HashMap
 };
 
 template <typename Value, size_t Size>
-HashMap<Value, Size>::HashMap()
+LF_HashMap<Value, Size>::LF_HashMap()
     : _capacity(Size)
     , _epochManager(std::make_unique<EpochManager<Node>>())
 {
     _table.store(createBucketArray(Size), std::memory_order_release);
 }
 
-template <typename Value, size_t Size> HashMap<Value, Size>::~HashMap()
+template <typename Value, size_t Size> LF_HashMap<Value, Size>::~HashMap()
 {
     clearInternal();
 }
 
-template <typename Value, size_t Size> void HashMap<Value, Size>::clearInternal()
+template <typename Value, size_t Size> void LF_HashMap<Value, Size>::clearInternal()
 {
     auto table_p = _table.load();
 
@@ -147,7 +147,7 @@ template <typename Value, size_t Size> void HashMap<Value, Size>::clearInternal(
 }
 
 template <typename Value, size_t Size>
-typename HashMap<Value, Size>::Bucket* HashMap<Value, Size>::createBucketArray(size_t newSize)
+typename LF_HashMap<Value, Size>::Bucket* LF_HashMap<Value, Size>::createBucketArray(size_t newSize)
 {
     Bucket* newBuckets = new Bucket[newSize];
 
@@ -159,7 +159,7 @@ typename HashMap<Value, Size>::Bucket* HashMap<Value, Size>::createBucketArray(s
     return newBuckets;
 }
 
-template <typename Value, size_t Size> bool HashMap<Value, Size>::insert(const Value& msg)
+template <typename Value, size_t Size> bool LF_HashMap<Value, Size>::insert(const Value& msg)
 {
     _epochManager->enterEpoch();
 
@@ -199,7 +199,7 @@ template <typename Value, size_t Size> bool HashMap<Value, Size>::insert(const V
     return true;
 }
 
-template <typename Value, size_t Size> void HashMap<Value, Size>::resize()
+template <typename Value, size_t Size> void LF_HashMap<Value, Size>::resize()
 {
     std::cout << "Resizing the table\n";
 
@@ -245,7 +245,7 @@ template <typename Value, size_t Size> void HashMap<Value, Size>::resize()
     _epochManager->exitEpoch();
 }
 
-template <typename Value, size_t Size> bool HashMap<Value, Size>::find(uint64_t messageId, Value& result)
+template <typename Value, size_t Size> bool LF_HashMap<Value, Size>::find(uint64_t messageId, Value& result)
 {
     _epochManager->enterEpoch();
     size_t index = hash(messageId, _capacity.load());
@@ -266,7 +266,7 @@ template <typename Value, size_t Size> bool HashMap<Value, Size>::find(uint64_t 
     return false;
 }
 
-template <typename Value, size_t Size> bool HashMap<Value, Size>::remove(uint64_t messageId)
+template <typename Value, size_t Size> bool LF_HashMap<Value, Size>::remove(uint64_t messageId)
 {
     _epochManager->enterEpoch();
 
