@@ -16,7 +16,6 @@ namespace
 
 std::shared_mutex g_mutex;
 
-constexpr size_t INITIAL_CAPACITY = 8191;
 constexpr size_t NUM_KEYS = 1000;
 constexpr auto TIMEOUT_MS = 1000;
 

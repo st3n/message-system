@@ -14,7 +14,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -fsanitize=thread -fno-omit-frame-pointer")
 #set(CMAKE_CXX_FLAGS_DEBUG "-g -fsanitize=address -fno-omit-frame-pointer")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
-# Library for message container
+# Iterface for message container
 add_subdirectory(messages-container)
 
 # UDP Sender-Receiver Application
@@ -24,10 +24,5 @@ add_subdirectory(udp-messages)
 add_subdirectory(tcp-messages)
 
 # Common Application (UDP receive/send, TCP receive + message container)
-#add_executable(messageProcessor main.cpp)
-#
-#target_link_libraries(messageProcessor
-#    PRIVATE
-#    UdpProcessor
-#    TcpProcessor
-#)
+add_executable(MessageProcessor main.cpp)
+add_dependencies(MessageProcessor UdpProcessor TcpProcessor)

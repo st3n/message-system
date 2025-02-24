@@ -29,6 +29,7 @@ UdpProcessor::UdpProcessor(int tcpPort, int selfPort, HashMap<INITIAL_CAPACITY>&
 {
     _running.store(true, std::memory_order_release);
     std::signal(SIGINT, signalHandler);
+    std::signal(SIGTERM, signalHandler);
 
     const std::array<int, 3> temp = {_tcpServerPort, _selfPort};
 

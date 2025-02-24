@@ -36,6 +36,7 @@ TcpProcessor::TcpProcessor(int port)
     }
 
     std::signal(SIGINT, signalHandler);
+    std::signal(SIGTERM, signalHandler);
 }
 
 TcpProcessor::~TcpProcessor()
