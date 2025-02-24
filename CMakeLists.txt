@@ -24,10 +24,10 @@ add_subdirectory(udp-messages)
 add_subdirectory(tcp-messages)
 
 # Common Application (UDP receive/send, TCP receive + message container)
-add_executable(messageProcessor main.cpp)
-
-target_link_libraries(messageProcessor
-    PRIVATE
-    UdpProcessor
-    TcpProcessor
-)
+#add_executable(messageProcessor main.cpp)
+#
+#target_link_libraries(messageProcessor
+#    PRIVATE
+#    UdpProcessor
+#    TcpProcessor
+#)
