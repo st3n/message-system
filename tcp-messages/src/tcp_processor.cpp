@@ -10,6 +10,8 @@
 #include <thread>
 #include <unistd.h>
 #include <csignal>
+#include <fstream>
+#include <mutex>
 
 namespace
 {
@@ -22,7 +24,7 @@ constexpr int WORKER_COUNT = 12;
 std::thread workers[WORKER_COUNT];
 
 RingBuffer connectionQueue;
-
+std::mutex file_mutex;
 }  // namespace
 
 TcpProcessor::TcpProcessor(int port)
@@ -140,6 +142,13 @@ void TcpProcessor::worker()
                     std::cout << "Received TCP message: Type=" << (int)receivedMessage.MessageType
                               << ", Id=" << receivedMessage.MessageId << ", Data=" << receivedMessage.MessageData
                               << std::endl;
+                    {
+                        std::lock_guard<std::mutex> lock(file_mutex);
+                            std::ofstream log_file("tcp_messaages.log", std::ios::app);
+                            log_file << "Size: " << receivedMessage.MessageSize
+                                     << " Type: " << receivedMessage.MessageType << " ID: " << receivedMessage.MessageId
+                                     << " Data: " << receivedMessage.MessageData << std::endl;
+                    }
                 }
                 else if (received == 0)
                 {

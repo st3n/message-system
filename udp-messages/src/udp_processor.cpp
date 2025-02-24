@@ -5,20 +5,20 @@
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
-#include <netinet/in.h>
 #include <stdexcept>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
 #include <csignal>
+#include <fstream>
+#include <mutex>
 
 namespace
 {
 
-int selfSockfd{};
-int tcpSockfd{};
-struct sockaddr_in servaddr{};
 std::atomic<bool> _running;
+
+std::mutex file_mutex;
 
 }  // namespace
 
@@ -46,46 +46,46 @@ UdpProcessor::~UdpProcessor()
 {
     _running.store(false, std::memory_order_release);
 
-    if (selfSockfd > 0)
+    if (_tcpSockfd > 0)
     {
-        close(selfSockfd);
+        close(_tcpSockfd);
     }
 
-    if (tcpSockfd > 0)
+    if (_sockfd > 0)
     {
-        close(tcpSockfd);
+        close(_sockfd);
     }
 }
 
 std::optional<int> UdpProcessor::init()
 {
-    if ((selfSockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+    if ((_sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     {
         std::cerr << "Socket creation failed" << std::endl;
         return std::nullopt;
     }
 
     // Set socket to non-blocking mode
-    int flags{fcntl(selfSockfd, F_GETFL, 0)};
+    int flags{fcntl(_sockfd, F_GETFL, 0)};
     if (flags == -1)
     {
         std::cerr << "Failed to get socket flags" << std::endl;
         return std::nullopt;
     }
 
-    if (fcntl(selfSockfd, F_SETFL, flags | O_NONBLOCK) < 0)
+    if (fcntl(_sockfd, F_SETFL, flags | O_NONBLOCK) < 0)
     {
         std::cerr << "Failed to set socket to non-blocking mode" << std::endl;
         return std::nullopt;
     }
 
-    memset(&servaddr, 0, sizeof(servaddr));
+    memset(&_servaddr, 0, sizeof(_servaddr));
 
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = INADDR_ANY;
-    servaddr.sin_port = htons(_selfPort);
+    _servaddr.sin_family = AF_INET;
+    _servaddr.sin_addr.s_addr = INADDR_ANY;
+    _servaddr.sin_port = htons(_selfPort);
 
-    if (bind(selfSockfd, (const struct sockaddr*)&servaddr, sizeof(servaddr)) < 0)
+    if (bind(_sockfd, (const struct sockaddr*)&_servaddr, sizeof(_servaddr)) < 0)
     {
         std::cerr << "Bind failed" << std::endl;
         return std::nullopt;
@@ -94,7 +94,7 @@ std::optional<int> UdpProcessor::init()
     // open and setup tcp socket:
     struct sockaddr_in tcpserverAddr{};
 
-    if ((tcpSockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    if ((_tcpSockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         std::cerr << "TCP socket creation failed" << std::endl;
         return std::nullopt;
@@ -110,13 +110,13 @@ std::optional<int> UdpProcessor::init()
         return std::nullopt;
     }
 
-    if (connect(tcpSockfd, (struct sockaddr*)&tcpserverAddr, sizeof(tcpserverAddr)) < 0)
+    if (connect(_tcpSockfd, (struct sockaddr*)&tcpserverAddr, sizeof(tcpserverAddr)) < 0)
     {
         std::cerr << "TCP connection failed" << std::endl;
         return std::nullopt;
     }
 
-    return selfSockfd;  // return udp sock
+    return _sockfd;  // return udp sock
 }
 
 void UdpProcessor::run()
@@ -128,20 +128,18 @@ void UdpProcessor::run()
 
     std::cout << "UDP server started on port " << _selfPort << std::endl;
 
-    int sockfd = selfSockfd;
-
     fd_set read_fds{};
     struct timeval timeout{};
 
     while (_running.load(std::memory_order_acquire))
     {
         FD_ZERO(&read_fds);
-        FD_SET(sockfd, &read_fds);
+        FD_SET(_sockfd, &read_fds);
 
         timeout.tv_sec = 0;
         timeout.tv_usec = 500;
 
-        int activity{select(sockfd + 1, &read_fds, nullptr, nullptr, &timeout)};
+        int activity{select(_sockfd + 1, &read_fds, nullptr, nullptr, &timeout)};
         if (activity < 0)
         {
             std::cerr << "select failed: " << strerror(errno) << std::endl;
@@ -153,7 +151,7 @@ void UdpProcessor::run()
             continue;
         }
 
-        if (FD_ISSET(sockfd, &read_fds))
+        if (FD_ISSET(_sockfd, &read_fds))
         {
             struct sockaddr_in cliaddr{};
             socklen_t len{sizeof(cliaddr)};
@@ -162,7 +160,7 @@ void UdpProcessor::run()
             Message receivedMessage{};
 
             // Receive a message
-            ssize_t n{recvfrom(sockfd,
+            ssize_t n{recvfrom(_sockfd,
                 reinterpret_cast<char*>(&receivedMessage),
                 sizeof(receivedMessage),
                 0,
@@ -176,6 +174,12 @@ void UdpProcessor::run()
                           << std::endl;
 
                 _map.insert(receivedMessage);  // duplicates are managed inside container
+                {
+                    std::lock_guard<std::mutex> lock(file_mutex);
+                    std::ofstream log_file("udp_messaages.log", std::ios::app);
+                    log_file << "Size: " << receivedMessage.MessageSize << " Type: " << receivedMessage.MessageType << " ID: " << receivedMessage.MessageId
+                             << " Data: " << receivedMessage.MessageData << std::endl;
+                }
 
                 // If MessageData equals 10, send it via TCP asynchronously
                 if (receivedMessage.MessageData == 10)
@@ -195,7 +199,7 @@ void UdpProcessor::run()
 
 void UdpProcessor::sendViaTcp(Message message)
 {
-    if (send(tcpSockfd, &message, sizeof(message), 0) < 0)
+    if (send(_tcpSockfd, &message, sizeof(message), 0) < 0)
     {
         std::cerr << "Failed to send message via TCP" << std::endl;
     }
@@ -211,21 +215,21 @@ int main(int argc, char* argv[])
 {
     if (argc != 4)
     {
-        std::cerr << "Usage: " << argv[0] << " <TCP_PORT> <UDP_PORT_1> <UDP_PORT_2>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << "<UDP_PORT_1> <UDP_PORT_2> <TCP_PORT> " << std::endl;
         return 1;
     }
 
-    int tcpPort = std::stoi(argv[1]);
-    int udpPort1 = std::stoi(argv[2]);
-    int udpPort2 = std::stoi(argv[3]);
+    int udpPort1 = std::stoi(argv[1]);
+    int udpPort2 = std::stoi(argv[2]);
+    int tcpPort = std::stoi(argv[3]);
 
     HashMap<INITIAL_CAPACITY> messageMap;
 
     UdpProcessor udpProcessor1(tcpPort, udpPort1, messageMap);
     UdpProcessor udpProcessor2(tcpPort, udpPort2, messageMap);
 
+    std::jthread udpThread1(&UdpProcessor::run, &udpProcessor1);
     std::jthread udpThread2(&UdpProcessor::run, &udpProcessor2);
-    udpProcessor1.run();
 
     return 0;
 }

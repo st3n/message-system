@@ -5,6 +5,7 @@ sudo apt-get install -y g++
 sudo apt-get install -y make
 sudo apt-get install -y cmake
 sudo apt-get install -y ninja-build
+sudo apt-get install -y libtsan libasan
 
 echo "GCC version:"
 g++ --version
