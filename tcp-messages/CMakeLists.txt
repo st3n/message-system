@@ -1,4 +1,5 @@
-add_executable(TcpProcessor src/tcp_processor.cpp)
+file(GLOB_RECURSE TCP_PROCESSOR_SOURCES src/*.cpp)
+add_executable(TcpProcessor ${TCP_PROCESSOR_SOURCES})
 
 target_include_directories(TcpProcessor
  PUBLIC
@@ -8,4 +9,4 @@ PRIVATE
     ..
 )
 
-target_link_libraries(TcpProcessor PRIVATE MessagesContainer)
+target_link_libraries(TcpProcessor PRIVATE MessagesContainer Serialization)

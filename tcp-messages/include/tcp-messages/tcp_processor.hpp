@@ -1,33 +1,26 @@
 #pragma once
 
-#include <message.hpp>
-
-#include <optional>
 #include <atomic>
+#include <cstdint>
+#include <thread>
 
 class TcpProcessor
 {
-  private:
-    int _selfPort;
-
-    std::optional<int> init();
-
-    void worker();
-
-    // Static pointer to the current instance
-     static TcpProcessor* _instance;
-     static void signalHandler(int);
-
   public:
-    TcpProcessor(int port);
+    TcpProcessor(uint16_t port);
     ~TcpProcessor();
 
-    // Delete copy constructor and copy assignment operator
-    TcpProcessor(const TcpProcessor&) = delete;
-    TcpProcessor& operator=(const TcpProcessor&) = delete;
+    void start();
+    void stop();
 
-    TcpProcessor(TcpProcessor&& other) = delete;
-    TcpProcessor& operator=(TcpProcessor&& other) = delete;
+  private:
+    bool setupSocket();
+    static void signalHandler(int);
+    bool addToProcess(int fd);
+    void worker();
 
-    void run();
+    uint16_t _port;
+    int _serverFd = -1;
+    int _epollFd = -1;
+    std::thread _workerThread;
 };

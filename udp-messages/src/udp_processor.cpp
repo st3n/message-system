@@ -1,5 +1,7 @@
 #include "udp-messages/udp_processor.hpp"
 
+#include <serializer.hpp>
+
 #include <arpa/inet.h>
 #include <atomic>
 #include <cstring>
@@ -153,19 +155,8 @@ void UdpProcessor::run()
 
         if (FD_ISSET(_sockfd, &read_fds))
         {
-            struct sockaddr_in cliaddr{};
-            socklen_t len{sizeof(cliaddr)};
-            memset(&cliaddr, 0, sizeof(cliaddr));
-
             Message receivedMessage{};
-
-            // Receive a message
-            ssize_t n{recvfrom(_sockfd,
-                reinterpret_cast<char*>(&receivedMessage),
-                sizeof(receivedMessage),
-                0,
-                (struct sockaddr*)&cliaddr,
-                &len)};
+            int n = receiveMessage(_sockfd, receivedMessage);
 
             if (n == sizeof(receivedMessage))
             {
@@ -174,12 +165,14 @@ void UdpProcessor::run()
                           << std::endl;
 
                 _map.insert(receivedMessage);  // duplicates are managed inside container
+                /*
                 {
                     std::lock_guard<std::mutex> lock(file_mutex);
                     std::ofstream log_file("udp_messaages.log", std::ios::app);
                     log_file << "Size: " << receivedMessage.MessageSize << " Type: " << receivedMessage.MessageType << " ID: " << receivedMessage.MessageId
                              << " Data: " << receivedMessage.MessageData << std::endl;
                 }
+                */
 
                 // If MessageData equals 10, send it via TCP asynchronously
                 if (receivedMessage.MessageData == 10)
@@ -199,7 +192,8 @@ void UdpProcessor::run()
 
 void UdpProcessor::sendViaTcp(Message message)
 {
-    if (send(_tcpSockfd, &message, sizeof(message), 0) < 0)
+    int n = sendMessage(_tcpSockfd, message);
+    if (n < 0)
     {
         std::cerr << "Failed to send message via TCP" << std::endl;
     }

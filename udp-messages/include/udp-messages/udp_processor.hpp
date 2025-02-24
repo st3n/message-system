@@ -1,6 +1,5 @@
 #pragma once
 
-#include <message.hpp>
 #include <messages-container/blocking/hash_map.hpp>
 
 #include <netinet/in.h>

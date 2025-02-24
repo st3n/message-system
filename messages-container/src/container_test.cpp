@@ -1,6 +1,5 @@
 // #include "messages-container/lock-free/lock_free_container.hpp"
 #include "messages-container/blocking/hash_map.hpp"
-#include <message.hpp>
 
 #include <atomic>
 #include <cassert>

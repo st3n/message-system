@@ -1,4 +1,3 @@
-#include "message.hpp"
 #include <arpa/inet.h>
 #include <chrono>
 #include <fstream>
@@ -11,6 +10,19 @@
 
 namespace
 {
+
+constexpr uint16_t UDP_PORT_1   = 50001;
+constexpr uint16_t UDP_PORT_2   = 50002;
+constexpr uint16_t TCP_PORT     = 50003;
+
+struct Message
+{
+    uint16_t MessageSize;
+    uint8_t MessageType;
+    uint64_t MessageId;
+    uint64_t MessageData;
+} __attribute__((packed));
+
 std::mutex file_mutex;
 thread_local std::mt19937_64 rng(std::random_device{}());
 
@@ -25,7 +37,7 @@ Message generate_random_message()
     return Message{
         dist_size(rng),  // MessageSize
         dist_type(rng),  // MessageType
-        dist_data(rng),  // MessageId
+        key_dist(rng),  // MessageId
         dist_data(rng)  // MessageData
     };
 }

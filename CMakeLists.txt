@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 project(NetworkSystem)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -pthread")
 
 # Set build types
@@ -22,6 +23,9 @@ add_subdirectory(udp-messages)
 
 # TCP Receiver Application
 add_subdirectory(tcp-messages)
+
+# serialization
+add_subdirectory(serialization)
 
 # Common Application (UDP receive/send, TCP receive + message container)
 #add_executable(MessageProcessor main.cpp)

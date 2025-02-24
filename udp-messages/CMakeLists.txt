@@ -8,4 +8,4 @@ PRIVATE
     ..
 )
 
-target_link_libraries(UdpProcessor PRIVATE MessagesContainer)
+target_link_libraries(UdpProcessor PRIVATE MessagesContainer Serialization)
