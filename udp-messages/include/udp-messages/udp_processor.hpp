@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <optional>
 
-class UdpProcessor
+class UdpServer
 {
   private:
     int _tcpSockfd{};
@@ -26,14 +26,14 @@ class UdpProcessor
     void sendViaTcp(Message message);
 
   public:
-    UdpProcessor(int tcpPort, int selfPort, HashMap<INITIAL_CAPACITY>& map);
-    ~UdpProcessor();
+    UdpServer(int tcpPort, int selfPort, HashMap<INITIAL_CAPACITY>& map);
+    ~UdpServer();
 
-    UdpProcessor(const UdpProcessor&) = delete;
-    UdpProcessor& operator=(const UdpProcessor&) = delete;
+    UdpServer(const UdpServer&) = delete;
+    UdpServer& operator=(const UdpServer&) = delete;
 
-    UdpProcessor(UdpProcessor&& other) = delete;
-    UdpProcessor& operator=(UdpProcessor&& other) = delete;
+    UdpServer(UdpServer&& other) = delete;
+    UdpServer& operator=(UdpServer&& other) = delete;
 
     void run();
 };

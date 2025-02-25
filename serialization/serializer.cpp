@@ -17,7 +17,6 @@ void serializeMessage(const Message& msg, char* buffer)
     memcpy(buffer + sizeof(size) + sizeof(msg.MessageType) + sizeof(id), &data, sizeof(data));
 }
 
-// Deserialize a byte stream into a Message struct
 void deserializeMessage(const char* buffer, Message& msg)
 {
     uint16_t size;
@@ -34,7 +33,6 @@ void deserializeMessage(const char* buffer, Message& msg)
     msg.MessageData = ntohll(data);
 }
 
-// Helper function to handle 64-bit endianness
 uint64_t htonll(uint64_t value)
 {
     static const int num = 1;
@@ -62,35 +60,49 @@ int sendMessage(int sockfd, const Message& msg)
     char buffer[sizeof(Message)];
     serializeMessage(msg, buffer);
 
-    ssize_t bytesSent = send(sockfd, buffer, sizeof(buffer), 0);
-    if (bytesSent < 0)
+    size_t totalSent = 0;
+    size_t messageSize = sizeof(Message);
+
+    while (totalSent < messageSize)
     {
-        std::cerr << "Send failed: " << strerror(errno) << std::endl;
-    }
-    else if (bytesSent != sizeof(buffer))
-    {
-        std::cerr << "Incomplete message sent" << std::endl;
+        ssize_t bytesSent = send(sockfd, buffer + totalSent, messageSize - totalSent, 0);
+
+        if (bytesSent < 0)
+        {
+            std::cerr << "Send failed: " << strerror(errno) << std::endl;
+            return -1;
+        }
+
+        totalSent += bytesSent;
     }
 
-    return bytesSent;
+    return totalSent;
 }
 
 int receiveMessage(int sockfd, Message& msg)
 {
     char buffer[sizeof(Message)];
-    ssize_t bytesRead = recv(sockfd, buffer, sizeof(buffer), 0);
-    if (bytesRead < 0)
+    size_t totalReceived = 0;
+
+    while (totalReceived < sizeof(Message))
     {
-        std::cerr << "Receive failed: " << strerror(errno) << std::endl;
-    }
-    else if (bytesRead != sizeof(buffer))
-    {
-        std::cerr << "Incomplete message received" << std::endl;
-    }
-    else
-    {
-        deserializeMessage(buffer, msg);
+        ssize_t bytesRead = recv(sockfd, buffer + totalReceived, sizeof(Message) - totalReceived, 0);
+
+        if (bytesRead < 0)
+        {
+            std::cerr << "Receive failed: " << strerror(errno) << std::endl;
+            return -1;
+        }
+        else if (bytesRead == 0)
+        {
+            std::cerr << "Connection closed by peer" << std::endl;
+            return -1;
+        }
+
+        totalReceived += bytesRead;
     }
 
-    return bytesRead;
+    deserializeMessage(buffer, msg);
+
+    return totalReceived;
 }

@@ -24,7 +24,7 @@ std::mutex file_mutex;
 
 }  // namespace
 
-UdpProcessor::UdpProcessor(int tcpPort, int selfPort, HashMap<INITIAL_CAPACITY>& map)
+UdpServer::UdpServer(int tcpPort, int selfPort, HashMap<INITIAL_CAPACITY>& map)
     : _tcpServerPort(tcpPort)
     , _selfPort(selfPort)
     , _map(map)
@@ -44,7 +44,7 @@ UdpProcessor::UdpProcessor(int tcpPort, int selfPort, HashMap<INITIAL_CAPACITY>&
     }
 }
 
-UdpProcessor::~UdpProcessor()
+UdpServer::~UdpServer()
 {
     _running.store(false, std::memory_order_release);
 
@@ -59,7 +59,7 @@ UdpProcessor::~UdpProcessor()
     }
 }
 
-std::optional<int> UdpProcessor::init()
+std::optional<int> UdpServer::init()
 {
     if ((_sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     {
@@ -121,7 +121,7 @@ std::optional<int> UdpProcessor::init()
     return _sockfd;  // return udp sock
 }
 
-void UdpProcessor::run()
+void UdpServer::run()
 {
     if (!init())
     {
@@ -165,19 +165,16 @@ void UdpProcessor::run()
                           << std::endl;
 
                 _map.insert(receivedMessage);  // duplicates are managed inside container
-                /*
+
+                // If MessageData equals 10, send it via TCP asynchronously
+                if (receivedMessage.MessageData == 10)
                 {
                     std::lock_guard<std::mutex> lock(file_mutex);
                     std::ofstream log_file("udp_messaages.log", std::ios::app);
                     log_file << "Size: " << receivedMessage.MessageSize << " Type: " << receivedMessage.MessageType << " ID: " << receivedMessage.MessageId
                              << " Data: " << receivedMessage.MessageData << std::endl;
-                }
-                */
 
-                // If MessageData equals 10, send it via TCP asynchronously
-                if (receivedMessage.MessageData == 10)
-                {
-                    std::jthread(&UdpProcessor::sendViaTcp, this, receivedMessage).detach();
+                    std::jthread(&UdpServer::sendViaTcp, this, receivedMessage).detach();
                 }
             }
             else if (n < 0)
@@ -190,7 +187,7 @@ void UdpProcessor::run()
     std::cout << "UDP server stopped" << std::endl;
 }
 
-void UdpProcessor::sendViaTcp(Message message)
+void UdpServer::sendViaTcp(Message message)
 {
     int n = sendMessage(_tcpSockfd, message);
     if (n < 0)
@@ -199,10 +196,10 @@ void UdpProcessor::sendViaTcp(Message message)
     }
 }
 
-void UdpProcessor::signalHandler(int)
+void UdpServer::signalHandler(int)
 {
     _running.store(false, std::memory_order_release);
-    std::cout << "SIGINT received, stopping UdpProcessor..." << std::endl;
+    std::cout << "SIGINT received, stopping UdpServer..." << std::endl;
 }
 
 int main(int argc, char* argv[])
@@ -219,11 +216,11 @@ int main(int argc, char* argv[])
 
     HashMap<INITIAL_CAPACITY> messageMap;
 
-    UdpProcessor udpProcessor1(tcpPort, udpPort1, messageMap);
-    UdpProcessor udpProcessor2(tcpPort, udpPort2, messageMap);
+    UdpServer udpProcessor1(tcpPort, udpPort1, messageMap);
+    UdpServer udpProcessor2(tcpPort, udpPort2, messageMap);
 
-    std::jthread udpThread1(&UdpProcessor::run, &udpProcessor1);
-    std::jthread udpThread2(&UdpProcessor::run, &udpProcessor2);
+    std::jthread udpThread1(&UdpServer::run, &udpProcessor1);
+    std::jthread udpThread2(&UdpServer::run, &udpProcessor2);
 
     return 0;
 }

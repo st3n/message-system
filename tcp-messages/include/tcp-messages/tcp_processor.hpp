@@ -1,26 +1,28 @@
 #pragma once
 
+#include <sys/epoll.h>
 #include <atomic>
-#include <cstdint>
-#include <thread>
 
-class TcpProcessor
+
+class TcpServer
 {
   public:
-    TcpProcessor(uint16_t port);
-    ~TcpProcessor();
-
-    void start();
-    void stop();
+    TcpServer(int port);
+    ~TcpServer();
+    void run();
 
   private:
-    bool setupSocket();
-    static void signalHandler(int);
-    bool addToProcess(int fd);
-    void worker();
+    int _serverFd;
+    int _epollFd;
+    int _port;
+    volatile static std::atomic_bool _running;
+    int _clientFds[FD_SETSIZE];
+    int _clientCount;
 
-    uint16_t _port;
-    int _serverFd = -1;
-    int _epollFd = -1;
-    std::thread _workerThread;
+
+    bool setupServer();
+    void handleConnections();
+    static void signalHandler(int);
+    static int makeNonBlocking(int fd);
+    void closeClients();
 };

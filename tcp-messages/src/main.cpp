@@ -12,8 +12,8 @@ int main(int argc, char* argv[])
     }
 
     uint16_t port = static_cast<uint16_t>(std::atoi(argv[1]));
-    TcpProcessor server(port);
-    server.start();
+    TcpServer server(port);
+    server.run();
 
     return 0;
 }
