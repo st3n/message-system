@@ -1,6 +1,7 @@
 #include "udp-messages/udp_processor.hpp"
 
 #include <serializer.hpp>
+#include <common/signal_handler.hpp>
 
 #include <arpa/inet.h>
 #include <atomic>
@@ -15,10 +16,9 @@
 #include <fstream>
 #include <mutex>
 
+
 namespace
 {
-
-std::atomic<bool> _running;
 
 std::mutex file_mutex;
 
@@ -29,10 +29,6 @@ UdpServer::UdpServer(int tcpPort, int selfPort, HashMap<INITIAL_CAPACITY>& map)
     , _selfPort(selfPort)
     , _map(map)
 {
-    _running.store(true, std::memory_order_release);
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
-
     const std::array<int, 3> temp = {_tcpServerPort, _selfPort};
 
     for (const auto port : temp)
@@ -169,11 +165,13 @@ void UdpServer::run()
                 // If MessageData equals 10, send it via TCP asynchronously
                 if (receivedMessage.MessageData == 10)
                 {
+                    /*
                     std::lock_guard<std::mutex> lock(file_mutex);
                     std::ofstream log_file("udp_messaages.log", std::ios::app);
                     log_file << "Size: " << receivedMessage.MessageSize << " Type: " << receivedMessage.MessageType << " ID: " << receivedMessage.MessageId
                              << " Data: " << receivedMessage.MessageData << std::endl;
 
+                             */
                     std::jthread(&UdpServer::sendViaTcp, this, receivedMessage).detach();
                 }
             }
@@ -194,33 +192,4 @@ void UdpServer::sendViaTcp(Message message)
     {
         std::cerr << "Failed to send message via TCP" << std::endl;
     }
-}
-
-void UdpServer::signalHandler(int)
-{
-    _running.store(false, std::memory_order_release);
-    std::cout << "SIGINT received, stopping UdpServer..." << std::endl;
-}
-
-int main(int argc, char* argv[])
-{
-    if (argc != 4)
-    {
-        std::cerr << "Usage: " << argv[0] << "<UDP_PORT_1> <UDP_PORT_2> <TCP_PORT> " << std::endl;
-        return 1;
-    }
-
-    int udpPort1 = std::stoi(argv[1]);
-    int udpPort2 = std::stoi(argv[2]);
-    int tcpPort = std::stoi(argv[3]);
-
-    HashMap<INITIAL_CAPACITY> messageMap;
-
-    UdpServer udpProcessor1(tcpPort, udpPort1, messageMap);
-    UdpServer udpProcessor2(tcpPort, udpPort2, messageMap);
-
-    std::jthread udpThread1(&UdpServer::run, &udpProcessor1);
-    std::jthread udpThread2(&UdpServer::run, &udpProcessor2);
-
-    return 0;
 }

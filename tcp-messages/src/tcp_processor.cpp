@@ -1,6 +1,7 @@
 #include "tcp-messages/tcp_processor.hpp"
 #include <message.hpp>
 #include <serializer.hpp>
+#include <common/signal_handler.hpp>
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -12,6 +13,7 @@
 #include <mutex>
 #include <fstream>
 
+
 namespace
 {
 
@@ -20,15 +22,10 @@ constexpr int MAX_EVENTS = 16;
 
 }  // namespace
 
-volatile std::atomic_bool TcpServer::_running = true;
-
 TcpServer::TcpServer(int port)
     : _port(port)
     , _clientCount(0)
 {
-    signal(SIGINT, signalHandler);
-    signal(SIGTERM, signalHandler);
-
     if (!setupServer())
     {
         throw std::runtime_error("Couldn't setup a socket");
@@ -41,12 +38,6 @@ TcpServer::~TcpServer()
 
     close(_serverFd);
     close(_epollFd);
-}
-
-void TcpServer::signalHandler(int)
-{
-    _running = false;
-    std::cout << "SIGINT received, stopping TCPServer..." << std::endl;
 }
 
 int TcpServer::makeNonBlocking(int fd)
@@ -102,7 +93,7 @@ void TcpServer::run()
 {
     epoll_event events[MAX_EVENTS];
 
-    while (_running)
+    while (_running.load())
     {
         int numEvents = epoll_wait(_epollFd, events, MAX_EVENTS, -1);
         if (numEvents < 0)
@@ -140,6 +131,7 @@ void TcpServer::run()
                               << ", Id=" << receivedMessage.MessageId << ", Data=" << receivedMessage.MessageData
                               << std::endl;
 
+                              /*
                     if (receivedMessage.MessageData == 10)
                     {
                         std::unique_lock<std::mutex> lk(file_mutex);
@@ -148,6 +140,7 @@ void TcpServer::run()
                                  << " ID: " << receivedMessage.MessageId << " Data: " << receivedMessage.MessageData
                                  << std::endl;
                     }
+                                 */
                 }
                 else if (bytesRead == 0 || (bytesRead < 0 && errno != EAGAIN && errno != EWOULDBLOCK))
                 {

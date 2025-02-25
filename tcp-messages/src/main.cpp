@@ -1,5 +1,7 @@
 #include "tcp-messages/tcp_processor.hpp"
 
+#include <common/signal_handler.hpp>
+
 #include <iostream>
 
 
@@ -11,8 +13,12 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    setupSignalHandler();
+
     uint16_t port = static_cast<uint16_t>(std::atoi(argv[1]));
     TcpServer server(port);
+
+
     server.run();
 
     return 0;

@@ -18,18 +18,17 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 # Iterface for message container
 add_subdirectory(messages-container)
 
-# UDP Sender-Receiver Application
+# UDP Sender-Receiver Application, Lib
 add_subdirectory(udp-messages)
 
-# TCP Receiver Application
+# TCP Receiver Application, Lib
 add_subdirectory(tcp-messages)
 
 # serialization
 add_subdirectory(serialization)
 
+# common
+add_subdirectory(common)
+
 # Common Application (UDP receive/send, TCP receive + message container)
-#add_executable(MessageProcessor main.cpp)
-add_executable(MessageProcessor message_system_test.cpp)
-target_link_libraries(MessageProcessor Serialization)
-target_include_directories(MessageProcessor  PRIVATE .)
-add_dependencies(MessageProcessor UdpProcessor TcpProcessor)
+add_subdirectory(message-system)

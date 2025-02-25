@@ -19,9 +19,6 @@ class UdpServer
 
     HashMap<INITIAL_CAPACITY>& _map;
 
-     // Static pointer to the current instance
-     static void signalHandler(int);
-
     std::optional<int> init();
     void sendViaTcp(Message message);
 
